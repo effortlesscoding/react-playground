@@ -1,13 +1,24 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import Login from './routes/login';
+import Restricted from './routes/restricted/Restricted';
 
 ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
+  //<React.StrictMode>
+    //<App />
+  //</React.StrictMode>,
+  <Router>
+    <Routes>
+        <Route path="/" element={<App />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/restricted/*" element={<Restricted/>} />
+        </Route>
+    </Routes>
+  </Router>,
   document.getElementById('root')
 );
 
