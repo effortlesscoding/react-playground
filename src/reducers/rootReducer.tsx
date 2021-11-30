@@ -1,5 +1,5 @@
 const initState = {
-    name: "stranger",
+    name: "stranger2",
     token: "",
     authenticated: false
 }
