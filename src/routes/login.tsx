@@ -1,30 +1,80 @@
-import { useContext } from 'react';
-import { authContext } from '../user';
-import {Link} from "react-router-dom";
+import {connect} from 'react-redux';
 import { useNavigate } from "react-router-dom";
+import httpClient from '../httpClient';
 
-export default function Login() {
-  const { setAuthenticated, authenticated } = useContext(authContext);
-  //console.log('context value::', { authenticated });
-  const handleLogin = () => {
-    setAuthenticated(true);
-    setTimeout(() => {
-      navigate("/restricted/dashboard");
-    }, 0)
-  };
-  let navigate = useNavigate();
+type StateProps = {    
+    name: string;
+    token: string;
+    authenticated: boolean;   
+}
+
+type Credentials = { username: string; password: string };
+
+type DispatchProps = {
+    loginUser: (creds: Credentials) => Promise<void>;
+}
+const Login = (props: DispatchProps & StateProps) => {    
+    console.log(props)
+    const handleLogin = async (e:any) => {
+        e.preventDefault();
+        let credentials = {
+            username: e.target[0].value,
+            password: e.target[1].value
+        }    
+        props.loginUser(credentials).then(() => {
+            navigate("/dashboard");
+        });   
+    };
+
+    let navigate = useNavigate();
     return (
-      <main style={{ padding: "1rem 0" }}>
-        <h2>login</h2>
-        <div>
-          <label>Username:</label>
-          <input></input>
+        <div className="center container">
+            <h2>Login</h2>
+            <form onSubmit={handleLogin}>
+                <div>
+                    <label>Username:</label>
+                    <input name="username"></input>
+                </div>
+                <div>
+                    <label>Password:</label>
+                    <input type="password" name="password"></input>
+                </div>
+                <button type="submit">Login</button>
+            </form>           
         </div>
-        <div>
-          <label>Password:</label>
-          <input type="password"></input>
-        </div>
-        <button onClick={handleLogin}>Login</button>
-      </main>
     );
-  }
+}
+
+const mapStateToProps = (state:any, ownProps:{}): StateProps => {
+    return{
+        ...ownProps, 
+        name: state.name,
+        token: state.token,
+        authenticated: state.authenticated        
+    }
+}
+
+const performLogin = (dispatch: any) => async (credentials: Credentials) => {
+    const user = {
+        name: "",
+        token: "",
+        authenticated: false
+    }
+    //
+    return httpClient.authenticate(credentials).then((r)=>{            
+        user.token = r;
+        user.authenticated=true;
+        return httpClient.getProfile(r).then(r2=>user.name=r2);
+        
+    }).then(()=> {
+        dispatch({type: 'LOGIN_USER', user: user})    
+    });
+}
+
+const mapDispatchToProps = (dispatch:any) :DispatchProps => {    
+    return{
+        loginUser: performLogin(dispatch)
+    };
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Login)

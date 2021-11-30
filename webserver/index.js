@@ -3,10 +3,11 @@ const app = express();
 const port = 3020;
 const bodyParser = require('body-parser');
 
+
 app.use(bodyParser.json());
 
 const validCredentials = [
-    ['testuser', 'Password123', 'asdfasdfasdfasdfdsaf', { firstName: 'Test user', lastName: 'Junior'}],
+    ['ts', '123', 'asdfasdfasdfasdfdsaf', { firstName: 'Test user', lastName: 'Junior'}],
 ]
 
 var authMiddleware = function (req, res, next) {

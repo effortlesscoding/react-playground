@@ -1,37 +1,15 @@
-import { useState, useEffect } from 'react';
-import { createTheme, ThemeProvider } from '@material-ui/core/styles';
-import AppNavBar from './AppNavBar';
-import AppContent from './AppContent';
-import { Outlet, Link } from "react-router-dom";
-import { authContext } from './user';
+import React from 'react';
+import { Outlet} from "react-router-dom";
+import Navbar from './Navbar';
 
 
-const App = function () {
-  let [auth, setAuth] = useState(false);
-
-  // let [fname, setfName] = useState("John");
-  // let [lname, setlName] = useState("Smith");
-  // const dataEx = (fn: string, ln: string) => {
-  //  setfName(fn);
-  //  setlName(ln);
-  // }
-  // useEffect(() => {
-
-  //   return () => {
-
-  //   };
-  // }, []);
-  console.log(auth);
+function App() {
   return (
-    <>
-    <authContext.Provider value={{authenticated: auth , setAuthenticated: (e:boolean) => {setAuth(e)}}}>
-      <div> user is {`${auth ? "" : "not"} authenticated`} </div>
-      
-      <AppNavBar></AppNavBar>
+    <div className="App">
+      <Navbar />
       <Outlet />
-      </authContext.Provider>
-    </>
+    </div>
   );
-};
+}
 
 export default App;
