@@ -1,43 +1,437 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Web site created using create-react-app"
-    />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+<head>
+  <meta charset="utf-8">
+  <!-- Include the CesiumJS JavaScript and CSS files -->
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <script type="module">
+    // Your access token can be found at: https://ion.cesium.com/tokens.
+    // Replace `your_access_token` with your Cesium ion access token.
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>React App</title>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlZjM2MmU4My03MDdiLTQ4NDYtYmUyMy03YzU1ZTBkMmE0MjAiLCJpZCI6MjQyMDYyLCJpYXQiOjE3MjY1NDkxNzB9.On_XUZ3FVnzlrC_HP_aOZK7HQEcjC3m_zebHji1nWrU';
 
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
+    // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
+    const viewer = new Cesium.Viewer('cesiumContainer', {
+      infoBox: false,
+      timeline: false,
+      animation: false,
+    });
+    window.viewer = viewer; 
 
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
-  </body>
+    // Fly the camera to San Francisco at the given longitude, latitude, and height.
+    viewer.scene.camera.setView({
+      destination: new Cesium.Cartesian3(
+        1216411.0748779264,
+        -4736313.10747583,
+        4081359.5125561724
+      ),
+      orientation: new Cesium.HeadingPitchRoll(
+        4.239925103568368,
+        -0.4911293834802475,
+        6.279849292088564
+      ),
+      endTransform: Cesium.Matrix4.IDENTITY,
+    });
+
+
+    // QUESTION: Is our globe terrain with mountains and stuff or ellipsoid?
+
+    // Add Cesium OSM Buildings, a global 3D buildings layer.
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+
+    const MODE = {
+      PICK_CENTER: 'pick_center',
+      PICK_RADIUS: 'pick_radius',
+      PICK_HEIGHT: 'pick_height',
+      FIN: 'fin',
+    }
+
+    const options = {
+      fullCircleOnMouseMovePreview,
+      circleOnClicks,
+      WIP_optionWithPolylinePreview,
+    };
+
+    options.fullCircleOnMouseMovePreview();
+
+    // #region Option 1
+    /**
+     * OPTION 1:
+     * Let's try setting up a circle on 2 clicks.
+     */
+     function circleOnClicks() {
+        let cartesianCenter, cartesianRadiusPointer, totalDistanceInMeters;
+        function getCartesianCenter() {
+          console.log('debug::cartesianCenter::', cartesianCenter);
+          return cartesianCenter;
+        }
+        function getCartesianRadius() {
+          console.log('debug::totalDistanceInMeters::', totalDistanceInMeters);
+          return totalDistanceInMeters ?? 1;
+        }
+        function getIsVisible() {
+          return totalDistanceInMeters > 0 && !!cartesianCenter;
+        }
+        function getPolylinePoints() {
+          return [cartesianRadiusPointer, cartesianCenter].filter(Boolean);
+        }
+        let circleEntity;
+        function undoCircle() {
+          if (!circleEntity) {
+            return;
+          }
+          viewer.entities.remove(circleEntity);
+          circleEntity = null;
+        }
+        function initCircle() {
+          if (circleEntity) return;
+          circleEntity = {
+            position: cartesianCenter,
+            ellipse: {
+              height, // 1km above ellipsoid ?
+              material: Cesium.Color.YELLOW,
+              rotation: 0,
+              fill: true,
+              show: new Cesium.CallbackProperty(getIsVisible),
+              semiMajorAxis: new Cesium.CallbackProperty(getCartesianRadius),
+              semiMinorAxis: new Cesium.CallbackProperty(getCartesianRadius),
+            },
+            polyline: {
+              height: height + 1,
+              positions: new Cesium.CallbackProperty(getPolylinePoints),
+              width: 4,
+              material: Cesium.Color.RED,
+              outlineWidth: 3,
+              outlineColor: Cesium.Color.BLACK,
+            }
+          };
+          const height = 0;
+          viewer.entities.add(circleEntity);
+        }
+
+        handler.setInputAction((event) => {
+          console.log('debug::click::', event);
+          // get the Cartesian position
+          const ray = viewer.camera.getPickRay(event.position);
+          const cartesianPosition = viewer.scene.globe.pick(ray, viewer.scene);
+          if (!cartesianCenter) {
+            cartesianCenter = cartesianPosition;
+            initCircle();
+          } else {
+            cartesianRadiusPointer = cartesianPosition;
+            // https://gis.stackexchange.com/questions/175399/cesium-js-line-length/175430#175430
+            const surfacePositions = Cesium.PolylinePipeline.generateArc({
+              positions: [cartesianCenter, cartesianRadiusPointer]
+            });
+            const scratchCartesian3 = new Cesium.Cartesian3();
+            const surfacePositionsLength = surfacePositions.length;
+            totalDistanceInMeters = 0;
+            for (let i = 3; i < surfacePositionsLength; i += 3) {
+                scratchCartesian3.x = surfacePositions[i] - surfacePositions[i - 3];
+                scratchCartesian3.y = surfacePositions[i + 1] - surfacePositions[i - 2];
+                scratchCartesian3.z = surfacePositions[i + 2] - surfacePositions[i - 1];
+                totalDistanceInMeters += Cesium.Cartesian3.magnitude(scratchCartesian3);
+            }
+
+            console.log('debug::totalDistanceInMeters::', totalDistanceInMeters);
+
+          }
+
+          // if (cartesianPositions.length === 0) {
+          //   cartesianPositions.push(cartesianPosition);
+          // } else {
+          //   cartesianPositions = [cartesianPositions[0], cartesianPosition];
+          // }
+        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+     }
+
+     // #endregion
+
+    // #region OPTION 2
+     /**
+     * OPTION 2:
+     * Let's try setting up a circle on mouse move with polyline preview
+     */
+
+     // STATE: WIP
+     function WIP_optionWithPolylinePreview() {
+      let cartesianPositions = [];
+      let mode = MODE.PICK_CENTER;
+
+      function getCartesianPositions() {
+        console.log('debug::getCartesianPositions', cartesianPositions);
+        return cartesianPositions;
+      };
+
+      function initPolyline() {
+        viewer.entities.add({
+          polyline: {
+            positions: new Cesium.CallbackProperty(getCartesianPositions, false),
+            arcType: Cesium.ArcType.NONE,
+            width: 2,
+            material: new Cesium.PolylineOutlineMaterialProperty({
+              color: Cesium.Color.YELLOW,
+            }),
+            depthFailMaterial: new Cesium.PolylineOutlineMaterialProperty({
+              color: Cesium.Color.YELLOW,
+            }),
+          },
+        });
+      };
+
+      handler.setInputAction((event) => {
+        console.log('debug::click::', event);
+        // get the Cartesian position
+        const ray = viewer.camera.getPickRay(event.position);
+        var cartesianPosition = viewer.scene.globe.pick(ray, viewer.scene);
+
+        if (cartesianPositions.length === 0) {
+          cartesianPositions.push(cartesianPosition);
+        } else {
+          cartesianPositions = [cartesianPositions[0], cartesianPosition];
+        }
+      }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+      initPolyline();
+     }
+    
+     // #endregion
+    
+     // #region OPTION 3
+     /**
+     * OPTION 3:
+     * Let's try setting up a circle on mouse move
+     */
+     function fullCircleOnMouseMovePreview() {
+        let cartesianCenter,
+            cartesianRadiusPointer,
+            cartesianHeightPointer,
+            cartesianMouseCursorPointer,
+            totalDistanceInMeters,
+            totalHeightInMeters = 1;
+        let mode = MODE.PICK_CENTER;
+        function getCartesianCenter() {
+          return cartesianCenter;
+        }
+        function getCartesianRadius() {
+          return totalDistanceInMeters ?? 1;
+        }
+        function getIsVisible() {
+          return totalDistanceInMeters > 0 && !!cartesianCenter;
+        }
+        function getPolylinePoints() {
+          return [cartesianRadiusPointer, cartesianCenter].filter(Boolean);
+        }
+        let circleEntity, pointerEntity;
+        function recalculateRadius() {
+          if (!cartesianCenter || !cartesianRadiusPointer) {
+            return (totalDistanceInMeters = 0);
+          }
+          const surfacePositions = Cesium.PolylinePipeline.generateArc({
+            positions: [cartesianCenter, cartesianRadiusPointer]
+          });
+          const scratchCartesian3 = new Cesium.Cartesian3();
+          const surfacePositionsLength = surfacePositions.length;
+          totalDistanceInMeters = 0;
+          for (let i = 3; i < surfacePositionsLength; i += 3) {
+              scratchCartesian3.x = surfacePositions[i] - surfacePositions[i - 3];
+              scratchCartesian3.y = surfacePositions[i + 1] - surfacePositions[i - 2];
+              scratchCartesian3.z = surfacePositions[i + 2] - surfacePositions[i - 1];
+              totalDistanceInMeters += Cesium.Cartesian3.magnitude(scratchCartesian3);
+          }
+          console.log('debug::totalDistanceInMeters::', totalDistanceInMeters);
+        }
+        function recalculateHeight() {
+          if (!cartesianHeightPointer || !cartesianRadiusPointer) {
+            return (totalHeightInMeters = 1);
+          }
+          totalHeightInMeters = Math.max(Cesium.Cartesian3.distance(cartesianRadiusPointer, cartesianHeightPointer), 1);
+        }
+        function getCylinderHeight() {
+          return totalHeightInMeters;
+        }
+
+        function getCartesianMouseCursorPointer() {
+          if (!cartesianMouseCursorPointer) {
+            return cartesianMouseCursorPointer;
+          }
+          return {
+            ...cartesianMouseCursorPointer,
+            x: cartesianMouseCursorPointer.x - 1,
+            y: cartesianMouseCursorPointer.y - 1,
+            z: cartesianMouseCursorPointer.z - 1,
+          };
+        }
+
+        function undoCircle() {
+          if (!circleEntity) {
+            return;
+          }
+          console.log('debug::removing::', circleEntity);
+          viewer.entities.removeById(circleEntity.id);
+          circleEntity = null;
+        }
+        function undoPointer() {
+          if (!pointerEntity) {
+            return;
+          }
+          viewer.entities.removeById(pointerEntity.id);
+        }
+        function initMovingPointer() {
+          if (pointerEntity || mode !== MODE.PICK_CENTER) {
+            return;
+          }
+          pointerEntity = {
+            id: 'pointer',
+            position: new Cesium.CallbackProperty(getCartesianMouseCursorPointer),
+            point: {
+              color: Cesium.Color.BLUE.withAlpha(0.5),
+              pixelSize: 5,
+              outlineWidth: 1,
+              outlineColor: Cesium.Color.BLACK.withAlpha(0.5),
+            }
+          };
+          viewer.entities.add(pointerEntity);
+        }
+        function initCircle() {
+          if (circleEntity) return;
+          const height = 0;
+          circleEntity = ({
+            id: 'circle',
+            position: cartesianCenter,
+            cylinder: {
+              length: new Cesium.CallbackProperty(getCylinderHeight),
+              material: Cesium.Color.YELLOW.withAlpha(0.5),
+              heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+              show: new Cesium.CallbackProperty(getIsVisible),
+              topRadius: new Cesium.CallbackProperty(getCartesianRadius),
+              bottomRadius: new Cesium.CallbackProperty(getCartesianRadius),
+            },
+            polyline: {
+              height: height + 1,
+              positions: new Cesium.CallbackProperty(getPolylinePoints),
+              width: 4,
+              material: Cesium.Color.RED,
+              outlineWidth: 3,
+              outlineColor: Cesium.Color.BLACK,
+            }
+          });
+          viewer.entities.add(circleEntity);
+        }
+
+        function getCartesianPosition(position) {
+          // get the Cartesian position
+          const ray = viewer.camera.getPickRay(position);
+          return viewer.scene.globe.pick(ray, viewer.scene);
+        }
+
+        handler.setInputAction((event) => {
+          // get the Cartesian position
+          const cartesianPosition = getCartesianPosition(event.position);
+          console.log('debug::click::', event);
+          console.log('debug::cartesianPosition::', cartesianPosition);
+          console.log('debug::mode::', mode);
+          switch (mode) {
+            case MODE.PICK_CENTER: {
+              cartesianCenter = cartesianPosition;
+              cartesianMouseCursorPointer = null;
+              undoPointer();
+              initCircle();
+              mode = MODE.PICK_RADIUS;
+              break;
+            }
+            case MODE.PICK_RADIUS: {
+              cartesianRadiusPointer = cartesianPosition;
+              recalculateRadius();
+              mode = MODE.PICK_HEIGHT;
+              break;
+            }
+            case MODE.PICK_HEIGHT: {
+              cartesianHeightPointer = cartesianPosition;
+              recalculateHeight();
+              mode = MODE.FIN;
+              break;
+            }
+            case MODE.FIN: {
+              cartesianCenter = cartesianPosition;
+              cartesianHeightPointer = null;
+              cartesianRadiusPointer = null;
+              recalculateHeight();
+              recalculateRadius();
+              undoCircle();
+              initCircle();
+              mode = MODE.PICK_RADIUS;
+              break;
+            }
+          }
+        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+        handler.setInputAction((event) => {
+          // get the Cartesian position
+          const cartesianPosition = getCartesianPosition(event.position);
+          console.log('debug::click::', event);
+          console.log('debug::cartesianPosition::', cartesianPosition);
+          console.log('debug::mode::', mode);
+          switch (mode) {
+            case MODE.PICK_CENTER: {
+              cartesianCenter = null;
+              break;
+            }
+            case MODE.PICK_RADIUS: {
+              cartesianRadiusPointer = null;
+              recalculateRadius();
+              undoCircle();
+              mode = MODE.PICK_CENTER;
+              break;
+            }
+            case MODE.PICK_HEIGHT: {
+              cartesianHeightPointer = null;
+              recalculateHeight();
+              mode = MODE.PICK_RADIUS;
+              break;
+            }
+            case MODE.FIN: {
+              // cartesianHeightPointer = null;
+              // recalculateHeight();
+              // mode = MODE.PICK_HEIGHT;
+              break;
+            }
+          }
+        }, Cesium.ScreenSpaceEventType.RIGHT_DOWN);
+
+        handler.setInputAction((event) => {
+          switch (mode) {
+            case MODE.FIN:
+            case MODE.PICK_CENTER: {
+              cartesianMouseCursorPointer = getCartesianPosition(event.endPosition);
+              initMovingPointer();
+              break;
+            }
+            case MODE.PICK_RADIUS: {
+              // https://gis.stackexchange.com/questions/175399/cesium-js-line-length/175430#175430
+              recalculateRadius();
+              break;
+            }
+            case MODE.PICK_HEIGHT: {
+              const currentMousePosition = getCartesianPosition(event.endPosition);
+              // get the Cartesian position
+              const ray = viewer.camera.getPickRay(currentMousePosition);
+              cartesianHeightPointer = viewer.scene.globe.pick(ray, viewer.scene);
+              recalculateHeight();
+              break;
+            }
+          }
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+     }
+
+     // #endregion
+  </script>
+ </div>
+</body>
 </html>
