@@ -257,15 +257,7 @@
         }
 
         function getCartesianMouseCursorPointer() {
-          if (!cartesianMouseCursorPointer) {
-            return cartesianMouseCursorPointer;
-          }
-          return {
-            ...cartesianMouseCursorPointer,
-            x: cartesianMouseCursorPointer.x - 1,
-            y: cartesianMouseCursorPointer.y - 1,
-            z: cartesianMouseCursorPointer.z - 1,
-          };
+          return cartesianMouseCursorPointer;
         }
 
         function undoCircle() {
@@ -281,17 +273,19 @@
             return;
           }
           viewer.entities.removeById(pointerEntity.id);
+          pointerEntity = null;
         }
         function initMovingPointer() {
-          if (pointerEntity || mode !== MODE.PICK_CENTER) {
+          if (pointerEntity || ![MODE.PICK_CENTER, MODE.FIN].includes(mode)) {
             return;
           }
           pointerEntity = {
             id: 'pointer',
             position: new Cesium.CallbackProperty(getCartesianMouseCursorPointer),
             point: {
-              color: Cesium.Color.BLUE.withAlpha(0.5),
-              pixelSize: 5,
+              color: Cesium.Color.RED,
+              pixelSize: 15,
+              height: 5,
               outlineWidth: 1,
               outlineColor: Cesium.Color.BLACK.withAlpha(0.5),
             }
@@ -405,23 +399,25 @@
         }, Cesium.ScreenSpaceEventType.RIGHT_DOWN);
 
         handler.setInputAction((event) => {
+          console.log('debug::mode::', mode);
+          const mousePosition = getCartesianPosition(event.endPosition);
           switch (mode) {
             case MODE.FIN:
             case MODE.PICK_CENTER: {
-              cartesianMouseCursorPointer = getCartesianPosition(event.endPosition);
+              console.log('debug:pointer!');
+              cartesianMouseCursorPointer = mousePosition;
               initMovingPointer();
               break;
             }
             case MODE.PICK_RADIUS: {
+              cartesianRadiusPointer = mousePosition;
               // https://gis.stackexchange.com/questions/175399/cesium-js-line-length/175430#175430
               recalculateRadius();
               break;
             }
             case MODE.PICK_HEIGHT: {
-              const currentMousePosition = getCartesianPosition(event.endPosition);
               // get the Cartesian position
-              const ray = viewer.camera.getPickRay(currentMousePosition);
-              cartesianHeightPointer = viewer.scene.globe.pick(ray, viewer.scene);
+              cartesianHeightPointer = mousePosition;
               recalculateHeight();
               break;
             }
